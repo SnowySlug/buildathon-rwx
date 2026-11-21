@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+*.jsonl
+validation*.json
+holdout-output/
+versions/
