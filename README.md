@@ -10,16 +10,24 @@ so the repository stays below the 20 MB cap.
 
 The selector applies each patch in memory. Existing function-body edits select
 tests that executed the pristine function, read the source file, or belong to an
-edited test module. Structural/module/import/fixture changes, new definitions,
+edited test module. Existing data-file edits select observed pristine readers;
+collection-loaded or unmapped data stays conservative. Same-structure module or
+class value edits use a second pristine trace of receiver MROs, metadata-table
+origins and imported globals. Before pruning these edits, a bounded offline
+subprocess imports the patched modules; import failure or timeout selects all
+tests. Python AST equivalence preserves encoding and type comments and still
+includes observed raw-source readers; comments are never classified by label.
+Structural/import changes, new definitions, dunder/external-state assignments,
 unrecognized patches, unknown incoming tests, and source mismatches fall back
 to every test. All selected tests are scheduled by exact integer milliseconds
 over one through eight workers. No patches or sample answers are included here.
 
 `coverage.json` is a plain, ordinary JSON Git file generated on the pristine pinned
-source with the official Python3.13 image and requirements.lock. It maps test
+source with the official Python 3.13 image and requirements.lock. It maps test
 IDs to executed functions and opened files. Function bitsets and path IDs reduce
-the map from13.63MB to0.85MB;8,265,479 membership checks and identical sample
+the original line map from 13.63 MB to 0.85 MB; 8,265,479 membership checks and identical sample
 output establish equivalence for every outer-function query this selector accepts.
+The extra pristine module-consumer bitsets bring the complete map to 0.92 MB.
 It contains no patch-answer or
 edit-kind-answer lookup. Numbered incoming tests are remapped by their IDs.
 The recorder runs process-pool tasks synchronously with task/result/exception
@@ -36,6 +44,24 @@ docker build --platform linux/amd64 -t buildathon-rwx:entry .
 The production default is coverage selection. `--strategy balanced` selects
 every test with optimized scheduling, and `--strategy starter` reproduces the
 original three-worker baseline. All logs go to stderr.
+
+The 30 public sample changes score 260.240 simulated seconds with zero misses;
+three restricted Linux runs and the exact image command validate. This is local
+evidence, not a prediction of final rank. Independent fixture and serializer
+mutations retained every failing test. An independent DuckDB class-constant
+mutation was checked in the full original test order: all eight failing methods
+were selected. A source-comment mutation also passed all omitted tests.
+
+## Regenerating pristine maps
+
+Use the exact source commit, Python image digest and requirements.lock. Run
+build_coverage.py on the pristine full source to generate raw line/open coverage.
+Run compact_map.py against that same source to encode function intervals. Run
+trace_consumers.py on pristine source for class/import consumers, then use
+merge_consumers.py to merge that trace into the compact map. These scripts read
+no challenge patches or sample answers. The committed map can be regenerated
+and checked by SHA256 and membership equivalence. Process-pool instrumentation
+and consumer approximations remain documented limitations.
 
 ## Attribution and license
 

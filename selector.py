@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import ast
-import copy
 import hashlib
 import json
 import re
@@ -19,6 +18,7 @@ from pathlib import Path, PurePosixPath
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from scheduler import choose_workers, split
 from map_codec import load_coverage
+from python_impact import analyze, imports_safely
 
 HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 
@@ -46,7 +46,7 @@ def apply_patch(patch: str, source: Path) -> dict[str, tuple[str, str]]:
         if name != new_path[2:] or name in results or "\\" in name:
             raise ValueError("rename or duplicate file")
         relative = PurePosixPath(name)
-        if relative.is_absolute() or ".." in relative.parts or not name.endswith(".py"):
+        if relative.is_absolute() or ".." in relative.parts:
             raise ValueError("unhandled file")
         path = (source / name).resolve()
         if not path.is_relative_to(source.resolve()):
@@ -114,9 +114,12 @@ def changed_functions(before: str, after: str) -> list[tuple[int, int]]:
         shapes = []
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-                shell = copy.deepcopy(node)
-                shell.body = [ast.Pass()]
-                shapes.append(ast.dump(shell, include_attributes=False))
+                body = node.body
+                try:
+                    node.body = [ast.Pass()]
+                    shapes.append(ast.dump(node, include_attributes=False))
+                finally:
+                    node.body = body
             elif isinstance(node, (ast.Import, ast.ImportFrom, ast.Global, ast.Nonlocal)):
                 shapes.append(ast.dump(node, include_attributes=False))
         return shapes
@@ -158,13 +161,30 @@ def select(tests: list[dict], edits: dict, coverage: dict,
             or any(test["id"] not in recorded for test in tests)):
         return tests, "incomplete or failing baseline"
     for name, texts in edits.items():
-        expected = coverage.get("source_python_sha256", {}).get(name)
+        expected = (coverage.get("source_python_sha256", {}).get(name) if name.endswith(".py")
+                    else coverage.get("source_file_sha256", {}).get(name))
         # Synthetic unit maps may omit hashes; real recorded maps always bind
         # every source file. Check before using a real map.
         actual = (source_hashes or {}).get(name, hashlib.sha256(texts[0].encode("utf-8")).hexdigest())
         if coverage.get("format") and expected != actual:
             return tests, "source hash mismatch"
-    spans = {name: changed_functions(*texts) for name, texts in edits.items()}
+    analyses = {name: analyze(*texts) for name, texts in edits.items() if name.endswith(".py")}
+    spans = {name: result[0] for name, result in analyses.items() if result[0]}
+    module_data = {name for name, result in analyses.items() if result[1]}
+    equivalent = {name for name, result in analyses.items() if result[2]}
+    if module_data - coverage.get("_import_safe", set()):
+        return tests, "module data import not validated"
+    masks = coverage.setdefault("_module_masks", {name: int(value, 16)
+                                                 for name, value in coverage.get("module_test_bits", {}).items()})
+    if any(not masks.get(name) for name in module_data):
+        return tests, "unmapped module data"
+    indices = coverage.setdefault("_module_indices", {test_id: index for index, test_id in enumerate(sorted(recorded))})
+    data_files = set(edits) - set(analyses)
+    if data_files.intersection(coverage.get("collection_opened", [])):
+        return tests, "edited data loaded during collection"
+    for name in data_files:
+        if not any(name in record.get("opened", []) for record in recorded.values()):
+            return tests, "unmapped data consumer"
     for name, ranges in spans.items():
         imported = coverage.get("collection_lines", {}).get(name, [])
         # Module execution records def headers; only body execution is evidence
@@ -176,6 +196,14 @@ def select(tests: list[dict], edits: dict, coverage: dict,
     for test in tests:
         context = recorded[test["id"]]
         hits = False
+        if data_files.intersection(context.get("opened", [])):
+            hits = True
+        if any(masks[name] & (1 << indices[test["id"]]) for name in module_data):
+            hits = True
+        if any(name in context.get("lines", {}) for name in module_data):
+            hits = True
+        if any(name in context.get("opened", []) or test["file"] == name for name in analyses):
+            hits = True
         for name, ranges in spans.items():
             # Source readers and tests in edited test modules are consumers even
             # when edited code never executed in the pristine run.
@@ -187,9 +215,11 @@ def select(tests: list[dict], edits: dict, coverage: dict,
                 hits = True
         if hits:
             selected.append(test)
+    if not selected and set(edits) == equivalent:
+        return [], "equivalent Python AST; no observed source readers"
     if not selected:
         return tests, "no mapped consumers"
-    return selected, "function coverage plus source readers"
+    return selected, "pristine function/data/module consumers and source readers"
 
 
 def main() -> None:
@@ -197,11 +227,14 @@ def main() -> None:
     parser.add_argument("--data", type=Path, default=Path("/data"))
     parser.add_argument("--source", type=Path, default=Path("/opt/sqlglot"))
     parser.add_argument("--coverage", type=Path, default=Path("/app/coverage.json"))
+    parser.add_argument("--source-index", type=Path, default=Path("/app/source_files.json"))
     parser.add_argument("--strategy", choices=("starter", "balanced", "coverage"), default="coverage")
     options = parser.parse_args()
     tests = json.loads((options.data / "tests.json").read_text("utf-8"))["tests"]
     coverage = (load_coverage(options.coverage)
                 if options.strategy == "coverage" else None)
+    if coverage is not None and options.source_index.is_file():
+        coverage["source_file_sha256"] = json.loads(options.source_index.read_text("utf-8"))
     for patch in sorted((options.data / "commits").glob("*.patch")):
         try:
             if options.strategy != "coverage":
@@ -209,10 +242,17 @@ def main() -> None:
                 print(json.dumps({"commit": patch.stem, "workers": workers}, separators=(",", ":")))
                 continue
             edits = apply_patch(patch.read_text("utf-8"), options.source)
+            needs_import = {name for name, texts in edits.items()
+                            if name.endswith(".py") and analyze(*texts)[1]}
+            coverage["_import_safe"] = set()
+            if needs_import:
+                if not imports_safely(edits, options.source):
+                    raise ValueError("patched module import failed or timed out")
+                coverage["_import_safe"] = needs_import
             source_hashes = {name: hashlib.sha256((options.source / name).read_bytes()).hexdigest()
                              for name in edits}
             selected, reason = select(tests, edits, coverage, source_hashes)
-        except (ValueError, OSError, SyntaxError, KeyError) as error:
+        except (ValueError, OSError, SyntaxError, KeyError, RecursionError) as error:
             selected, reason = tests, f"fallback: {error}"
         print(json.dumps({"commit": patch.stem, "workers": choose_workers(selected)}, separators=(",", ":")))
         print(json.dumps({"commit": patch.stem, "selected": len(selected), "reason": reason}), file=sys.stderr)
