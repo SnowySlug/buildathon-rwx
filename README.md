@@ -27,7 +27,7 @@ source with the official Python 3.13 image and requirements.lock. It maps test
 IDs to executed functions and opened files. Function bitsets and path IDs reduce
 the original line map from 13.63 MB to 0.85 MB; 8,265,479 membership checks and identical sample
 output establish equivalence for every outer-function query this selector accepts.
-The extra pristine module-consumer bitsets bring the complete map to 0.92 MB.
+The extra pristine module and immutable-field bitsets bring the complete map to 0.98 MB.
 It contains no patch-answer or
 edit-kind-answer lookup. Numbered incoming tests are remapped by their IDs.
 The recorder runs process-pool tasks synchronously with task/result/exception
@@ -92,3 +92,46 @@ Regenerate after the existing compact-map steps with:
 ```sh
 python repair_collection_map.py --raw-map raw-coverage.json --compact-map compact-consumers.json --source pinned-sqlglot --output coverage.json
 ```
+
+## Immutable Dialect field attribution
+
+An additional pristine trace records attribute reads on Dialect instances and
+their metaclass, with receiver MRO ancestry, collection events, and shared
+setup/teardown. Raw `__dict__` readers count as consumers of every eligible field.
+Narrowing applies only when the entire AST is unchanged except same-type
+immutable literal RHS values of existing class fields. Static source analysis
+requires every declared owner to descend from Dialect and excludes fields with
+bare-name reads, runtime field-name strings, outside writes, or module/metaclass
+derivations. Fields read during collection retain the module fallback. Every
+other metadata edit retains the previous module selection. Function consumers,
+raw-source readers, source hashes, unknown-input fallbacks, and bounded patched
+module import validation are retained.
+
+The new pristine trace passed 1,620 methods, skipped one, and passed 25,440
+subtests in 188.439s. Its source hashes match the function/module maps. An
+additional import audit verified all 206 declared owners of the 59 static field
+candidates are actual Dialect subclasses. The final map contains 190 eligible
+class-qualified fields in 29 files; unobserved fields retain module masks.
+
+A fresh independent PostgreSQL TYPED_DIVISION mutation was evaluated in the
+full original test order. All seven failing methods were among 13 selected
+tests; the preceding module selector selected 320 tests. Their scheduled costs
+are 3.009s and 12.896s respectively. An earlier independent DuckDB INDEX_OFFSET
+mutation's eight observed failures also remain selected: 35 tests, scheduled
+4.388s, versus the preceding module selector's 452 tests and 27.454s. These are
+local independent-mutation results; the 30 public sample selections remain
+unchanged at 198.039s with zero misses. They do not establish final-test recall.
+
+To regenerate from the same pristine source and locked research environment:
+
+```sh
+python inventory_fields.py --source pinned-sqlglot --output field-inventory.json
+python audit_owners.py --source pinned-sqlglot --inventory field-inventory.json --output owner-audit.json
+python trace_attributes.py --source pinned-sqlglot --output attribute-consumers.json --max-seconds 550
+python merge_attributes.py --map collection-map.json --trace attribute-consumers.json --inventory field-inventory.json --output coverage.json
+```
+
+Tracing is an approximation of fixed test executions, including synchronous
+pickle-roundtrip process-pool instrumentation. Arbitrary child-process reads and
+state propagation beyond observed dependencies remain limitations. This version
+keeps its previous fallbacks rather than pruning unknown data or structures.

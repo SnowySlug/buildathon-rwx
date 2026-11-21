@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from scheduler import choose_workers, split
 from map_codec import load_coverage
 from python_impact import analyze, imports_safely
+from field_impact import literal_fields
 
 HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 
@@ -178,6 +179,16 @@ def select(tests: list[dict], edits: dict, coverage: dict,
                                                  for name, value in coverage.get("module_test_bits", {}).items()})
     if any(not masks.get(name) for name in module_data):
         return tests, "unmapped module data"
+    # Only a strict subset of immutable, exclusively Dialect-owned fields can
+    # use attribute witnesses. Other metadata changes retain module consumers.
+    field_masks = {}
+    for name in module_data:
+        allowed = coverage.get("dialect_literal_field_bits", {}).get(name, {})
+        changes = literal_fields(*edits[name], allowed) if allowed else None
+        if changes:
+            field_masks[name] = 0
+            for field in changes:
+                field_masks[name] |= int(allowed[field], 16)
     indices = coverage.setdefault("_module_indices", {test_id: index for index, test_id in enumerate(sorted(recorded))})
     data_files = set(edits) - set(analyses)
     if data_files.intersection(coverage.get("collection_opened", [])):
@@ -201,9 +212,9 @@ def select(tests: list[dict], edits: dict, coverage: dict,
         hits = False
         if data_files.intersection(context.get("opened", [])):
             hits = True
-        if any(masks[name] & (1 << indices[test["id"]]) for name in module_data):
+        if any(field_masks.get(name, masks[name]) & (1 << indices[test["id"]]) for name in module_data):
             hits = True
-        if any(name in context.get("lines", {}) for name in module_data):
+        if any(name in context.get("lines", {}) for name in module_data - field_masks.keys()):
             hits = True
         if any(name in context.get("opened", []) or test["file"] == name for name in analyses):
             hits = True

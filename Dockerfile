@@ -3,5 +3,5 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY coverage.json fetch_source.py /app/
 RUN python /app/fetch_source.py
-COPY scheduler.py selector.py map_codec.py python_impact.py /app/
+COPY scheduler.py selector.py map_codec.py python_impact.py field_impact.py /app/
 CMD ["python", "/app/selector.py"]
