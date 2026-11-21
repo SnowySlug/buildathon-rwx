@@ -45,7 +45,7 @@ The production default is coverage selection. `--strategy balanced` selects
 every test with optimized scheduling, and `--strategy starter` reproduces the
 original three-worker baseline. All logs go to stderr.
 
-The 30 public sample changes score 260.240 simulated seconds with zero misses;
+The 30 public sample changes score 198.039 simulated seconds with zero misses;
 three restricted Linux runs and the exact image command validate. This is local
 evidence, not a prediction of final rank. Independent fixture and serializer
 mutations retained every failing test. An independent DuckDB class-constant
@@ -74,3 +74,21 @@ in the original workspace before this event session.
 
 Official rules: https://www.joinbuilders.org/buildathon/tracks/blast-radius
 Pinned source: https://github.com/tobymao/sqlglot/tree/eb11aec4be8cb2122afe713a4816662c3f0fb2fa
+
+## Collection-event attribution
+
+Function declaration lines, multiline signatures and default-annotation evaluation
+are separate from function body execution. The collection map retains actual body
+witnesses for normal functions and keeps generator, async, one-line and doc-only
+ambiguities conservative. All 5,033 normal-function intervals were checked against
+the original pristine trace; real trace unit tests cover declaration-only and
+actual-body-call cases. A fresh independent BigQuery body mutation was evaluated
+in the full original test order: its failing method was selected, with no omitted
+failures among 1,619 passing methods. No new pristine execution or sample-answer
+lookup was needed for this correction.
+
+Regenerate after the existing compact-map steps with:
+
+```sh
+python repair_collection_map.py --raw-map raw-coverage.json --compact-map compact-consumers.json --source pinned-sqlglot --output coverage.json
+```

@@ -186,6 +186,9 @@ def select(tests: list[dict], edits: dict, coverage: dict,
         if not any(name in record.get("opened", []) for record in recorded.values()):
             return tests, "unmapped data consumer"
     for name, ranges in spans.items():
+        ambiguous = {tuple(span) for span in coverage.get("collection_conservative_spans", {}).get(name, [])}
+        if any(tuple(span) in ambiguous for span in ranges):
+            return tests, "ambiguous declaration/body collection event"
         imported = coverage.get("collection_lines", {}).get(name, [])
         # Module execution records def headers; only body execution is evidence
         # that an edited function was actually called during collection.
