@@ -20,6 +20,7 @@ from scheduler import choose_workers, split
 from map_codec import load_coverage
 from python_impact import analyze, imports_safely
 from field_impact import literal_fields
+from semantic_impact import changed_comparisons, domains_prove
 
 HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 
@@ -229,6 +230,35 @@ def select(tests: list[dict], edits: dict, coverage: dict,
                 hits = True
         if hits:
             selected.append(test)
+    # An operator-only edit can be equivalent over an observed exact operand
+    # domain. Retain unknown/overloaded domains and all source readers. Domains
+    # come from pristine execution; no replacement outcomes are precomputed.
+    profile = coverage.get("comparison_operand_domains")
+    comparison_sites = []
+    profiled_paths = ({site.rsplit(":", 2)[0] for site in profile["sites"]} if profile else set())
+    if profile and not data_files and not module_data and set(edits).issubset(profiled_paths):
+        for name, texts in edits.items():
+            changed = changed_comparisons(*texts)
+            if not changed:
+                comparison_sites = []
+                break
+            comparison_sites.extend(name + ":" + location for location in changed)
+        if (comparison_sites and all(site in profile["sites"] for site in comparison_sites)
+                and not set(comparison_sites).intersection(profile["collection_sites"])):
+            unknown_mask = 0
+            for site in comparison_sites:
+                for pair, bits in profile["sites"][site].items():
+                    left, right = map(int, pair.split(","))
+                    if not domains_prove(profile["domains"][left], profile["domains"][right]):
+                        unknown_mask |= int(bits, 16)
+            # Unknown behavior in even one test could affect shared state in
+            # a later test. Require the proof across the complete traced suite.
+            if not unknown_mask:
+                selected = [test for test in selected
+                            if any(name in recorded[test["id"]].get("opened", [])
+                                   or test["file"] == name for name in edits)]
+                if not selected:
+                    return [], "operator equivalence over pristine exact operand domains; no source readers"
     if not selected and set(edits) == equivalent:
         return [], "equivalent Python AST; no observed source readers"
     if not selected:

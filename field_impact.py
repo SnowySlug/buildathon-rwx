@@ -32,8 +32,14 @@ def literal_fields(before, after, allowed):
 
             def field(self, node, target):
                 key = ".".join(self.classes + [target.id])
-                if self.classes and key in allowed and isinstance(node.value, ast.Constant):
-                    value = node.value.value
+                if self.classes and key in allowed:
+                    expression = node.value
+                    if not (isinstance(expression, ast.Constant)
+                            or (isinstance(expression, ast.UnaryOp) and isinstance(expression.op, (ast.UAdd, ast.USub))
+                                and isinstance(expression.operand, ast.Constant)
+                                and type(expression.operand.value) in (int, float))):
+                        return node
+                    value = ast.literal_eval(expression)
                     if type(value) in (str, int, float, bool, type(None)):
                         seen.append((key, type(value).__name__, value))
                         node.value = ast.Constant(None)

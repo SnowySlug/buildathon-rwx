@@ -30,6 +30,11 @@ class FieldGuardTests(unittest.TestCase):
         after = self.before.replace("FLAG = 1", "FLAG = 4").replace("OTHER = False", "OTHER = True")
         self.assertEqual(literal_fields(self.before, after, self.allowed), ["Demo.FLAG", "Demo.OTHER"])
 
+    def test_signed_numeric_literals(self):
+        before = self.before.replace("FLAG = 1", "FLAG = -1")
+        self.assertEqual(literal_fields(before, before.replace("FLAG = -1", "FLAG = -3"), self.allowed), ["Demo.FLAG"])
+        self.assertIsNone(literal_fields(before, before.replace("FLAG = -1", "FLAG = -(1 + 2)"), self.allowed))
+
 
 if __name__ == "__main__":
     unittest.main()

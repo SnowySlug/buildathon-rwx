@@ -57,6 +57,10 @@ def inventory(source):
                         if isinstance(target, ast.Name):
                             value = statement.value
                             literal = isinstance(value, ast.Constant) and type(value.value) in (str, int, float, bool, type(None))
+                            if (isinstance(value, ast.UnaryOp) and isinstance(value.op, (ast.UAdd, ast.USub))
+                                    and isinstance(value.operand, ast.Constant)
+                                    and type(value.operand.value) in (int, float)):
+                                literal = True
                             fields[target.id].append({"owner": qualified, "path": name,
                                                       "line": target.lineno, "literal": literal})
             if isinstance(node, ast.Attribute):

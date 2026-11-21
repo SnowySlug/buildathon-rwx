@@ -27,7 +27,7 @@ source with the official Python 3.13 image and requirements.lock. It maps test
 IDs to executed functions and opened files. Function bitsets and path IDs reduce
 the original line map from 13.63 MB to 0.85 MB; 8,265,479 membership checks and identical sample
 output establish equivalence for every outer-function query this selector accepts.
-The extra pristine module and immutable-field bitsets bring the complete map to 0.98 MB.
+The extra pristine module, field and operand-domain maps bring the complete map to 1.01 MB.
 It contains no patch-answer or
 edit-kind-answer lookup. Numbered incoming tests are remapped by their IDs.
 The recorder runs process-pool tasks synchronously with task/result/exception
@@ -45,7 +45,7 @@ The production default is coverage selection. `--strategy balanced` selects
 every test with optimized scheduling, and `--strategy starter` reproduces the
 original three-worker baseline. All logs go to stderr.
 
-The 30 public sample changes score 198.039 simulated seconds with zero misses;
+The 30 public sample changes score 139.693 simulated seconds with zero misses;
 three restricted Linux runs and the exact image command validate. This is local
 evidence, not a prediction of final rank. Independent fixture and serializer
 mutations retained every failing test. An independent DuckDB class-constant
@@ -109,8 +109,8 @@ module import validation are retained.
 
 The new pristine trace passed 1,620 methods, skipped one, and passed 25,440
 subtests in 188.439s. Its source hashes match the function/module maps. An
-additional import audit verified all 206 declared owners of the 59 static field
-candidates are actual Dialect subclasses. The final map contains 190 eligible
+additional import audit verified all 211 declared owners of the 60 static field
+candidates are actual Dialect subclasses. The final map contains 195 eligible
 class-qualified fields in 29 files; unobserved fields retain module masks.
 
 A fresh independent PostgreSQL TYPED_DIVISION mutation was evaluated in the
@@ -119,8 +119,9 @@ tests; the preceding module selector selected 320 tests. Their scheduled costs
 are 3.009s and 12.896s respectively. An earlier independent DuckDB INDEX_OFFSET
 mutation's eight observed failures also remain selected: 35 tests, scheduled
 4.388s, versus the preceding module selector's 452 tests and 27.454s. These are
-local independent-mutation results; the 30 public sample selections remain
-unchanged at 198.039s with zero misses. They do not establish final-test recall.
+local independent-mutation results. The field-only predecessor kept the public
+samples at 198.039s; the operator proofs below reduce that to 139.693s with zero
+misses. These checks do not establish final-test recall.
 
 To regenerate from the same pristine source and locked research environment:
 
@@ -135,3 +136,61 @@ Tracing is an approximation of fixed test executions, including synchronous
 pickle-roundtrip process-pool instrumentation. Arbitrary child-process reads and
 state propagation beyond observed dependencies remain limitations. This version
 keeps its previous fallbacks rather than pruning unknown data or structures.
+
+## Identity and equality operator proofs
+
+A separate pristine trace records operand domains at identity comparisons in
+profiled source modules. Each record contains the exact operand type, equality
+slot facts, and a retained unique class ordinal. Canonical string/int Enum
+members additionally require distinct underlying primitive values. Recreated
+classes with the same module and qualified name have different ordinals.
+The map contains no replacement-operator outcomes or patch-to-answer entries.
+
+At runtime the entire module AST must differ only by Is-to-Eq or IsNot-to-NotEq
+operators, with identical operands and all other code unchanged. Across the
+complete traced suite, the selector proves equivalence only when both equality slots use object
+identity semantics (including None), or both operands are canonical members
+of the exact same Enum class with builtin primitive equality. Unknown or
+overloaded equality domains anywhere retain the existing selection for the
+entire patch, avoiding unproved shared-state effects between tests. Sites
+executed during collection retain the existing fallback. Shared setup and
+teardown operand domains are included; raw-source readers remain selected.
+Unprofiled sites, mixed edits, unknown incoming tests, and source hash mismatches
+retain established fallbacks. This proof uses type-domain facts rather than
+precomputing the tests broken by any edit.
+
+The proof is inductive over the fixed pristine executions: unchanged operators
+follow the same path, and every accepted changed comparison computes the same
+Boolean with no custom equality code. Therefore a changed comparison cannot
+introduce a different branch before an unobserved comparison. The underlying
+coverage process-pool and child-process limitations documented above still
+apply; this does not claim a complete Python program verifier.
+
+Signed numeric literals with a single unary plus/minus are also accepted by the
+immutable field guard. Calls, arithmetic expressions, containers, and type
+changes remain outside this extension. The existing attribute trace supplies
+these field consumers; no new mutable-container pruning is introduced.
+
+Reproduce the additional domain map after the field-map steps:
+
+```sh
+python trace_comparison_types.py --source pinned-sqlglot --output comparison-types.json --max-seconds 420
+python merge_comparison_types.py --map field-map.json --trace comparison-types.json --output coverage.json
+```
+
+A fresh comparison mutation at a separate Enum site was checked in full test
+order: all 1,620 methods passed with one skip, while the selector omitted the
+equivalent tests. A separate BigQuery WEEK_OFFSET mutation selected 16 methods
+and retained its failing method in a full ordered run. Regression tests reject
+overloaded equality, mismatched Enum classes sharing one qualified name, mixed
+AST edits, and signed nonliteral expressions. No official hidden-test result is
+inferred from these checks.
+
+The final class-identity trace passed 1,620 methods plus one skip and 25,440
+subtests in 176.414s. Its 29 sites have 51 exact operand domains. The final
+image's unmodified command and three restricted Linux runs emitted identical
+selections, scoring 139.693 simulated seconds with zero misses. The last local
+run set measured median cgroup CPU 7.920s and peak memory 76.50 MiB; CPU varies
+with the host and the official evaluation is authoritative. Twenty-two local
+guard/regression tests passed. An earlier run was rejected for inconsistent outputs; the final check was rerun
+with a unique image tag and no concurrent RWX job; no fallback was relaxed.
